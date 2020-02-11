@@ -14,7 +14,8 @@ PACKET_PAYLOAD_PORTION = 0.95
 LINK_RTT = 80  # millisec
 PACKET_SIZE = 1500  # bytes
 VIDEO_SIZE_FILE = './video_size_'
-NEW_CLIENT_PROB = 0.01
+NEW_CLIENT_PROB = 0.01 # tunable parameter
+MAX_CLIENT_NUM = 4     # tunable parameter
 
 class VideoClient:
     def __init__():

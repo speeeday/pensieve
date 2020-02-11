@@ -26,13 +26,14 @@ def main():
 
     assert len(VIDEO_BIT_RATE) == A_DIM
 
-    log_dict = {}
     
     all_cooked_time, all_cooked_bw, all_file_names = load_trace.load_trace()
 
     net_env = env.Environment(all_cooked_time=all_cooked_time,
                               all_cooked_bw=all_cooked_bw)
 
+    log_dict = [] * net_env.MAX_CLIENT_NUM
+    
     log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx]
     log_file = open(log_path, 'ab+')
 
@@ -91,7 +92,7 @@ def main():
 
         bit_rate = int(bit_rate)
 
-        if end_of_video or trace_end:
+        if end_of_videos:
             for client in log_dict:
                 log_file = log_dict[client]
                 log_file.write('\n')
