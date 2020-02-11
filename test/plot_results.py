@@ -16,7 +16,8 @@ SMOOTH_P = 1
 COLOR_MAP = plt.cm.jet #nipy_spectral, Set1,Paired 
 SIM_DP = 'sim_dp'
 #SCHEMES = ['BB', 'RB', 'FIXED', 'FESTIVE', 'BOLA', 'RL',  'sim_rl', SIM_DP]
-SCHEMES = ['sim_rl', SIM_DP]
+#SCHEMES = ['sim_rl', SIM_DP]
+SCHEMES = ['BB']
 
 def main():
 	time_all = {}
@@ -88,6 +89,7 @@ def main():
 					buff.append(float(parse[2]))
 					bw.append(float(parse[4]) / float(parse[5]) * BITS_IN_BYTE * MILLISEC_IN_SEC / M_IN_B)
 					reward.append(float(parse[6]))
+                                        print "{}\t{}\t{}\t{}\t{}".format(float(parse[0]), int(parse[1]), float(parse[2]),float(parse[4]) / float(parse[5]) * BITS_IN_BYTE * MILLISEC_IN_SEC / M_IN_B, float(parse[6])) 
 
 		if SIM_DP in log_file:
 			time_ms = time_ms[::-1]
@@ -101,7 +103,9 @@ def main():
 		# print log_file
 
 		for scheme in SCHEMES:
-			if scheme in log_file:
+                        print "Checking if {} is in {}".format(scheme, log_file)
+			if "_{}_".format(scheme.lower()) in log_file.lower():
+                                print "Found!"
 				time_all[scheme][log_file[len('log_' + str(scheme) + '_'):]] = time_ms
 				bit_rate_all[scheme][log_file[len('log_' + str(scheme) + '_'):]] = bit_rate
 				buff_all[scheme][log_file[len('log_' + str(scheme) + '_'):]] = buff
@@ -112,22 +116,28 @@ def main():
 	# ---- ---- ---- ----
 	# Reward records
 	# ---- ---- ---- ----
-		
+        print "\nReward Records"
+
 	log_file_all = []
 	reward_all = {}
 	for scheme in SCHEMES:
-		reward_all[scheme] = []
+		reward_all[scheme] = []  
 
+
+        print time_all[SCHEMES[0]]
+                
 	for l in time_all[SCHEMES[0]]:
 		schemes_check = True
 		for scheme in SCHEMES:
 			if l not in time_all[scheme] or len(time_all[scheme][l]) < VIDEO_LEN:
 				schemes_check = False
+                                print schemes_check
 				break
 		if schemes_check:
 			log_file_all.append(l)
 			for scheme in SCHEMES:
 				reward_all[scheme].append(np.sum(raw_reward_all[scheme][l][1:VIDEO_LEN]))
+                                print "{}".format(np.sum(raw_reward_all[scheme][l][1:VIDEO_LEN]))
 
 	mean_rewards = {}
 	for scheme in SCHEMES:

@@ -13,7 +13,8 @@ PACKET_PAYLOAD_PORTION = 0.95
 LINK_RTT = 80  # millisec
 PACKET_SIZE = 1500  # bytes
 VIDEO_SIZE_FILE = './video_size_'
-
+NUM_CLIENTS = 1  
+NEW_CLIENT_PROB = 0.01
 
 class Environment:
     def __init__(self, all_cooked_time, all_cooked_bw, random_seed=RANDOM_SEED):
