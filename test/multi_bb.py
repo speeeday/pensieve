@@ -32,21 +32,25 @@ def main():
     net_env = env.Environment(all_cooked_time=all_cooked_time,
                               all_cooked_bw=all_cooked_bw)
 
-    log_dict = [] * net_env.MAX_CLIENT_NUM
+    max_clients = net_env.MAX_CLIENT_NUM
     
-    log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx]
-    log_file = open(log_path, 'ab+')
+    log_files = [None] * max_clients
+    for i in range(max_clients):
+        log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx] + '_client_' + str(i)
+        log_file = open(log_path, 'wb')
+        log_files[i] = log_file
+        
 
     epoch = 0
     time_stamp = 0
 
-    last_bit_rate = {}
-    last_bit_rate[0] = DEFAULT_QUALITY
-    bit_rate = DEFAULT_QUALITY
-
-    r_batch = {}
+    last_bit_rate = [DEFAULT_QUALITY] * max_clients
+    bit_rate = [DEFAULT_QUALITY] * max_clients
+    r_batch = [[]] * max_clients
 
     video_count = 0
+
+    end_of_videos = [False] * max_clients
 
     while True:  # serve video forever
         # the action is from the last decision
@@ -67,40 +71,39 @@ def main():
                      - REBUF_PENALTY * rebuf \
                      - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[bit_rate] -
                                                VIDEO_BIT_RATE[last_bit_rate]) / M_IN_K
-            if client_num not in r_batch:
-                r_batch[client_num] = []
             r_batch[client_num].append(reward)
 
-            last_bit_rate = bit_rate
+            last_bit_rate[client_num] = bit_rate
 
-        # log time_stamp, bit_rate, buffer_size, reward
-        log_file.write(str(time_stamp / M_IN_K) + '\t' +
-                       str(VIDEO_BIT_RATE[bit_rate]) + '\t' +
-                       str(buffer_size) + '\t' +
-                       str(rebuf) + '\t' +
-                       str(video_chunk_size) + '\t' +
-                       str(delay) + '\t' +
-                       str(reward) + '\n')
-        log_file.flush()
+            # log time_stamp, bit_rate, buffer_size, reward
+            log_files[client_num].write(str(time_stamp / M_IN_K) + '\t' +
+                                        str(VIDEO_BIT_RATE[bit_rate]) + '\t' +
+                                        str(buffer_size) + '\t' +
+                                        str(rebuf) + '\t' +
+                                        str(video_chunk_size) + '\t' +
+                                        str(delay) + '\t' +
+                                        str(reward) + '\n')
+            log_files[client_num].flush()
 
-        if buffer_size < RESEVOIR:
-            bit_rate = 0
-        elif buffer_size >= RESEVOIR + CUSHION:
-            bit_rate = A_DIM - 1
-        else:
-            bit_rate = (A_DIM - 1) * (buffer_size - RESEVOIR) / float(CUSHION)
+            if buffer_size < RESEVOIR:
+                bit_rate[client_num] = 0
+            elif buffer_size >= RESEVOIR + CUSHION:
+                bit_rate[client_num] = A_DIM - 1
+            else:
+                bit_rate[client_num] = (A_DIM - 1) * (buffer_size - RESEVOIR) / float(CUSHION)
+            bit_rate[client_num] = int(bit_rate)
 
-        bit_rate = int(bit_rate)
-
-        if end_of_videos:
-            for client in log_dict:
-                log_file = log_dict[client]
+            end_of_videos[client_num] = end_of_video
+            
+        if all(end_of_videos):
+            for client in range(max_clients):
+                log_file = log_files[client]
                 log_file.write('\n')
                 log_file.close()
 
-            last_bit_rate = DEFAULT_QUALITY
-            bit_rate = DEFAULT_QUALITY  # use the default action here
-            r_batch = {}
+            last_bit_rate = [DEFAULT_QUALITY] * max_clients
+            bit_rate = [DEFAULT_QUALITY] * max_clients
+            r_batch = [[]] * max_clients
 
             print "video count", video_count
             video_count += 1
@@ -108,11 +111,13 @@ def main():
             if video_count > len(all_file_names):
                 break
 
-            log_dict = {}
-            
-            log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx] + '_client_' + str(client_num)
-            log_file = open(log_path, 'wb')
+            log_files = [None] * max_clients
+            for i in range(max_clients):
+                log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx] + '_client_' + str(i)
+                log_file = open(log_path, 'wb')
+                log_files[i] = log_file
 
-
+print "Done."
+                
 if __name__ == '__main__':
     main()

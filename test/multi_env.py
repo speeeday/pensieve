@@ -15,13 +15,32 @@ LINK_RTT = 80  # millisec
 PACKET_SIZE = 1500  # bytes
 VIDEO_SIZE_FILE = './video_size_'
 NEW_CLIENT_PROB = 0.01 # tunable parameter
-MAX_CLIENT_NUM = 4     # tunable parameter
+MAX_CLIENT_NUM = 2     # tunable parameter
 
 class VideoClient:
     def __init__():
+        self.video_chunk_counter = 0
+        self.buffer_size = 0
         
 
+    def serve_chunk(self, throughput, duration, video_chunk_size):
 
+        assert quality >= 0
+        assert quality < BITRATE_LEVELS
+
+        delay = 0.0
+
+        # check if buffer is greater than threshold, if so sleep
+        if self.buffer_size > BUFFER_THRESH:
+            # exceed the buffer limit
+            # we need to skip some network bandwidth here
+            # but do not add up the delay
+            drain_buffer_time = min(self.buffer_size - BUFFER_THRESH, duration)
+
+        
+        packet_payload = throughput * duration * PACKET_PAYLOAD_DURATION
+
+        
 class Environment:
     def __init__(self, all_cooked_time, all_cooked_bw, random_seed=RANDOM_SEED):
         assert len(all_cooked_time) == len(all_cooked_bw)
@@ -29,12 +48,13 @@ class Environment:
         np.random.seed(random_seed)
 
         self.num_clients = 1
+        self.clients = [VideoClient()]
 
         self.all_cooked_time = all_cooked_time
         self.all_cooked_bw = all_cooked_bw
 
-        self.video_chunk_counter = 0
-        self.buffer_size = 0
+#        self.video_chunk_counter = 0
+#        self.buffer_size = 0
 
         # pick a random trace file
         self.trace_idx = 0
@@ -56,45 +76,56 @@ class Environment:
 
     def get_video_chunks(self, quality):
 
-        assert quality >= 0
-        assert quality < BITRATE_LEVELS
+        assert all([q >= 0 for q in quality]
+        assert all([q < BITRATE_LEVELS for q u in quality])
 
+
+        # need to treat quality as a list instead of a bitrate value
+        # change simulator to serve all clients at every timestep, and return if any clients were able to finish in their timestep
+                   
         video_chunk_size = self.video_size[quality][self.video_chunk_counter]
 
         # use the delivery opportunity in mahimahi
         delay = 0.0  # in ms
         video_chunk_counter_sent = 0  # in bytes
 
-        trace_done = False
-        while True:  # download video chunk over mahimahi
-            throughput = self.cooked_bw[self.mahimahi_ptr] \
-                         * B_IN_MB / BITS_IN_BYTE
-            duration = self.cooked_time[self.mahimahi_ptr] \
-                       - self.last_mahimahi_time
+#        while True:  # download video chunk over mahimahi
+        throughput = self.cooked_bw[self.mahimahi_ptr] \
+                   * B_IN_MB / BITS_IN_BYTE
+        duration = self.cooked_time[self.mahimahi_ptr] \
+                   - self.last_mahimahi_time
 
-            weighted_queue = fair_sharing(self.num_clients)
+        # Scheduling policy goes here
+        # Should return a weight vector that distributes traffic between clients
+        weighted_queue = fair_sharing(self.num_clients)
 
-            
-            packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
+        records = []
+                   
+        for c in range(self.num_clients):
+            # simulate the timestep for each client given its proportion of BW
+            # add any records to be logged into the records list to be returned
+                   
+        packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
 
-            if video_chunk_counter_sent + packet_payload > video_chunk_size:
+        if video_chunk_counter_sent + packet_payload > video_chunk_size:
 
-                fractional_time = (video_chunk_size - video_chunk_counter_sent) / \
-                                  throughput / PACKET_PAYLOAD_PORTION
-                delay += fractional_time
-                self.last_mahimahi_time += fractional_time
-                break
+            fractional_time = (video_chunk_size - video_chunk_counter_sent) / \
+                              throughput / PACKET_PAYLOAD_PORTION
+            delay += fractional_time
+            self.last_mahimahi_time += fractional_time  # need to accoutn for full timestep for each client
+            break
 
-            video_chunk_counter_sent += packet_payload
-            delay += duration
-            self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr]
-            self.mahimahi_ptr += 1
+        video_chunk_counter_sent += packet_payload
+        delay += duration
 
-            if self.mahimahi_ptr >= len(self.cooked_bw):
-                # loop back in the beginning
-                # note: trace file starts with time 0
-                self.mahimahi_ptr = 1
-                self.last_mahimahi_time = 0
+        self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr]
+        self.mahimahi_ptr += 1
+
+        if self.mahimahi_ptr >= len(self.cooked_bw):
+            # loop back in the beginning
+            # note: trace file starts with time 0
+            self.mahimahi_ptr = 1
+            self.last_mahimahi_time = 0
 
         delay *= MILLISECONDS_IN_SECOND
         delay += LINK_RTT
@@ -166,6 +197,8 @@ class Environment:
         for i in xrange(BITRATE_LEVELS):
             next_video_chunk_sizes.append(self.video_size[i][self.video_chunk_counter])
 
+        # need to return the client_num in this tuple within a list for all clients who finished a chunk in this interval
+                   
         return delay, \
             sleep_time, \
             return_buffer_size / MILLISECONDS_IN_SECOND, \
@@ -174,3 +207,5 @@ class Environment:
             next_video_chunk_sizes, \
             end_of_video, \
             video_chunk_remain
+
+        return records
