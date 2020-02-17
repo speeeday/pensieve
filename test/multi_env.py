@@ -14,34 +14,99 @@ PACKET_PAYLOAD_PORTION = 0.95
 LINK_RTT = 80  # millisec
 PACKET_SIZE = 1500  # bytes
 VIDEO_SIZE_FILE = './video_size_'
-NEW_CLIENT_PROB = 0.01 # tunable parameter
-MAX_CLIENT_NUM = 2     # tunable parameter
 
 class VideoClient:
-    def __init__():
+    def __init__(self):
+        self.video_chunk_counter_sent = 0
         self.video_chunk_counter = 0
         self.buffer_size = 0
+        self.sleep_time = 0
+        self.delay = 0.0
+        self.end_of_video = False
         
 
-    def serve_chunk(self, throughput, duration, video_chunk_size):
+    def serve_chunk(self, client_num, throughput, duration, video_chunk_sizes):
 
-        assert quality >= 0
-        assert quality < BITRATE_LEVELS
-
-        delay = 0.0
-
+        records = []
+        
         # check if buffer is greater than threshold, if so sleep
         if self.buffer_size > BUFFER_THRESH:
             # exceed the buffer limit
             # we need to skip some network bandwidth here
             # but do not add up the delay
-            drain_buffer_time = min(self.buffer_size - BUFFER_THRESH, duration)
+            drain_buffer_time = min(self.buffer_size - BUFFER_THRESH, duration * MILLISECONDS_IN_SECOND)
+            self.sleep_time += np.ceil(drain_buffer_time / DRAIN_BUFFER_SLEEP_TIME) * \
+                         DRAIN_BUFFER_SLEEP_TIME
+            self.buffer_size -= self.sleep_time
+            duration -= self.sleep_time / MILLISECONDS_IN_SECOND
+
+        if duration > 0.0:
+            packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
+
+            video_chunk_size = video_chunk_sizes[self.video_chunk_counter]
+            
+            if self.video_chunk_counter_sent + packet_payload > video_chunk_size:
+                # chunk finished being served
+                fractional_time = (video_chunk_size - self.video_chunk_counter_sent) / \
+                                  throughput / PACKET_PAYLOAD_PORTION
+                self.delay += fractional_time
+                self.video_chunk_counter_sent = 0
+
+                duration -= fractional_time
+                
+                return_buffer_size = self.buffer_size
+                return_sleep_time = self.sleep_time
+                return_delay = (self.delay * MILLISECONDS_IN_SECOND) + LINK_RTT
+                
+                
+                self.video_chunk_counter += 1
+                video_chunk_remain = TOTAL_VIDEO_CHUNCK - self.video_chunk_counter
+                
+                if self.video_chunk_counter >= TOTAL_VIDEO_CHUNCK:
+                    self.end_of_video = True
+                    self.buffer_size = 0
+                    self.video_chunk_counter = 0
+
+
+                # rebuffer time
+                rebuf = np.maximum(self.delay - self.buffer_size, 0.0)
+
+                # update the buffer
+                self.buffer_size = np.maximum(self.buffer_size - self.delay, 0.0)
+
+                # add in the new chunk
+                self.buffer_size += VIDEO_CHUNCK_LEN
+
+                records.append((client_num, \
+                                return_delay, \
+                                return_sleep_time, \
+                                return_buffer_size / MILLISECONDS_IN_SECOND, \
+                                rebuf / MILLISECONDS_IN_SECOND, \
+                                video_chunk_size, \
+                                self.end_of_video, \
+                                video_chunk_remain))
+                    
+                self.video_chunk_counter_sent = 0
+                self.sleep_time = 0
+                self.delay = 0
+
+                if not(self.end_of_video):
+                    records = records + self.serve_chunk(client_num, throughput, duration, video_chunk_sizes)
+                
+            else:
+                # start serving next chunk for the duration
+                self.video_chunk_counter_sent += packet_payload
+                self.delay += duration
+        return records        
+
 
         
-        packet_payload = throughput * duration * PACKET_PAYLOAD_DURATION
 
-        
 class Environment:
+
+    NEW_CLIENT_PROB = 0.3 # tunable parameter
+    MAX_CLIENT_NUM = 1     # tunable parameter        
+
     def __init__(self, all_cooked_time, all_cooked_bw, random_seed=RANDOM_SEED):
         assert len(all_cooked_time) == len(all_cooked_bw)
 
@@ -76,14 +141,21 @@ class Environment:
 
     def get_video_chunks(self, quality):
 
-        assert all([q >= 0 for q in quality]
-        assert all([q < BITRATE_LEVELS for q u in quality])
+        assert all([q >= 0 for q in quality])
+        assert all([q < BITRATE_LEVELS for q in quality])
 
-
+                   
         # need to treat quality as a list instead of a bitrate value
         # change simulator to serve all clients at every timestep, and return if any clients were able to finish in their timestep
                    
-        video_chunk_size = self.video_size[quality][self.video_chunk_counter]
+        #video_chunk_size = self.video_size[quality][self.video_chunk_counter]
+
+
+        # at each timestep a new client joins with random probability
+        if (self.num_clients < self.MAX_CLIENT_NUM) and (np.random.random() < self.NEW_CLIENT_PROB):
+            self.clients.append(VideoClient())
+            self.num_clients += 1
+        
 
         # use the delivery opportunity in mahimahi
         delay = 0.0  # in ms
@@ -104,83 +176,12 @@ class Environment:
         for c in range(self.num_clients):
             # simulate the timestep for each client given its proportion of BW
             # add any records to be logged into the records list to be returned
-                   
-        packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
+            video_chunk_sizes = self.video_size[quality[c]]
+            records += self.clients[c].serve_chunk(c, throughput, duration, video_chunk_sizes)
 
-        if video_chunk_counter_sent + packet_payload > video_chunk_size:
 
-            fractional_time = (video_chunk_size - video_chunk_counter_sent) / \
-                              throughput / PACKET_PAYLOAD_PORTION
-            delay += fractional_time
-            self.last_mahimahi_time += fractional_time  # need to accoutn for full timestep for each client
-            break
-
-        video_chunk_counter_sent += packet_payload
-        delay += duration
-
-        self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr]
-        self.mahimahi_ptr += 1
-
-        if self.mahimahi_ptr >= len(self.cooked_bw):
-            # loop back in the beginning
-            # note: trace file starts with time 0
-            self.mahimahi_ptr = 1
-            self.last_mahimahi_time = 0
-
-        delay *= MILLISECONDS_IN_SECOND
-        delay += LINK_RTT
-
-        # rebuffer time
-        rebuf = np.maximum(delay - self.buffer_size, 0.0)
-
-        # update the buffer
-        self.buffer_size = np.maximum(self.buffer_size - delay, 0.0)
-
-        # add in the new chunk
-        self.buffer_size += VIDEO_CHUNCK_LEN
-
-        # sleep if buffer gets too large
-        sleep_time = 0
-        if self.buffer_size > BUFFER_THRESH:
-            # exceed the buffer limit
-            # we need to skip some network bandwidth here
-            # but do not add up the delay
-            drain_buffer_time = self.buffer_size - BUFFER_THRESH
-            sleep_time = np.ceil(drain_buffer_time / DRAIN_BUFFER_SLEEP_TIME) * \
-                         DRAIN_BUFFER_SLEEP_TIME
-            self.buffer_size -= sleep_time
-
-            while True:
-                duration = self.cooked_time[self.mahimahi_ptr] \
-                           - self.last_mahimahi_time
-                if duration > sleep_time / MILLISECONDS_IN_SECOND:
-                    self.last_mahimahi_time += sleep_time / MILLISECONDS_IN_SECOND
-                    break
-                sleep_time -= duration * MILLISECONDS_IN_SECOND
-                self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr]
-                self.mahimahi_ptr += 1
-
-                if self.mahimahi_ptr >= len(self.cooked_bw):
-                    # loop back in the beginning
-                    # note: trace file starts with time 0
-                    self.mahimahi_ptr = 1
-                    self.last_mahimahi_time = 0
-
-        # the "last buffer size" return to the controller
-        # Note: in old version of dash the lowest buffer is 0.
-        # In the new version the buffer always have at least
-        # one chunk of video
-        return_buffer_size = self.buffer_size
-
-        self.video_chunk_counter += 1
-        video_chunk_remain = TOTAL_VIDEO_CHUNCK - self.video_chunk_counter
-
-        end_of_video = False
-        if self.video_chunk_counter >= TOTAL_VIDEO_CHUNCK:
-            end_of_video = True
-            self.buffer_size = 0
-            self.video_chunk_counter = 0
-            
+        # check if all videos are done (if so, iterate traces)
+        if self.num_clients == self.MAX_CLIENT_NUM and all([v.end_of_video for v in self.clients]):
             self.trace_idx += 1
             if self.trace_idx >= len(self.all_cooked_time):
                 self.trace_idx = 0            
@@ -193,19 +194,18 @@ class Environment:
             self.mahimahi_ptr = self.mahimahi_start_ptr
             self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr - 1]
 
-        next_video_chunk_sizes = []
-        for i in xrange(BITRATE_LEVELS):
-            next_video_chunk_sizes.append(self.video_size[i][self.video_chunk_counter])
+            self.num_clients = 1
+            self.clients = [VideoClient()]
 
-        # need to return the client_num in this tuple within a list for all clients who finished a chunk in this interval
-                   
-        return delay, \
-            sleep_time, \
-            return_buffer_size / MILLISECONDS_IN_SECOND, \
-            rebuf / MILLISECONDS_IN_SECOND, \
-            video_chunk_size, \
-            next_video_chunk_sizes, \
-            end_of_video, \
-            video_chunk_remain
+        else:
+            self.last_mahimahi_time = self.cooked_time[self.mahimahi_ptr]
+            self.mahimahi_ptr += 1
+
+            if self.mahimahi_ptr >= len(self.cooked_bw):
+                # loop back in the beginning
+                # note: trace file starts with time 0
+                self.mahimahi_ptr = 1
+                self.last_mahimahi_time = 0
+
 
         return records

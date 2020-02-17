@@ -1,5 +1,5 @@
 import numpy as np
-import fixed_env as env
+import multi_env as env
 import load_trace
 
 
@@ -15,8 +15,8 @@ RANDOM_SEED = 42
 RAND_RANGE = 1000000
 RESEVOIR = 5  # BB
 CUSHION = 10  # BB
-SUMMARY_DIR = './results'
-LOG_FILE = './results/log_sim_bb'
+SUMMARY_DIR = './multi_results'
+LOG_FILE = './multi_results/log_sim_bb'
 # log in format of time_stamp bit_rate buffer_size rebuffer_time chunk_size download_time reward
 
 
@@ -56,28 +56,28 @@ def main():
         # the action is from the last decision
         # this is to make the framework similar to the real
         
-        chunk_info = net_env.get_video_chunk(bit_rate)
+        chunk_info = net_env.get_video_chunks(bit_rate)
 
         for i in chunk_info:
             (client_num, delay, sleep_time, buffer_size, rebuf, \
-             video_chunk_size, next_video_chunk_sizes, \
+             video_chunk_size, \
              end_of_video, video_chunk_remain) = i
 
             time_stamp += delay  # in ms
             time_stamp += sleep_time  # in ms
 
             # reward is video quality - rebuffer penalty
-            reward = VIDEO_BIT_RATE[bit_rate] / M_IN_K \
+            reward = VIDEO_BIT_RATE[bit_rate[client_num]] / M_IN_K \
                      - REBUF_PENALTY * rebuf \
-                     - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[bit_rate] -
-                                               VIDEO_BIT_RATE[last_bit_rate]) / M_IN_K
+                     - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[bit_rate[client_num]] -
+                                               VIDEO_BIT_RATE[last_bit_rate[client_num]]) / M_IN_K
             r_batch[client_num].append(reward)
 
-            last_bit_rate[client_num] = bit_rate
+            last_bit_rate[client_num] = bit_rate[client_num]
 
             # log time_stamp, bit_rate, buffer_size, reward
             log_files[client_num].write(str(time_stamp / M_IN_K) + '\t' +
-                                        str(VIDEO_BIT_RATE[bit_rate]) + '\t' +
+                                        str(VIDEO_BIT_RATE[bit_rate[client_num]]) + '\t' +
                                         str(buffer_size) + '\t' +
                                         str(rebuf) + '\t' +
                                         str(video_chunk_size) + '\t' +
@@ -91,8 +91,9 @@ def main():
                 bit_rate[client_num] = A_DIM - 1
             else:
                 bit_rate[client_num] = (A_DIM - 1) * (buffer_size - RESEVOIR) / float(CUSHION)
-            bit_rate[client_num] = int(bit_rate)
-
+            bit_rate[client_num] = int(bit_rate[client_num])
+ #           print "Changed bit rate of Client {} to {}".format(client_num, bit_rate[client_num])
+            
             end_of_videos[client_num] = end_of_video
             
         if all(end_of_videos):
@@ -101,6 +102,8 @@ def main():
                 log_file.write('\n')
                 log_file.close()
 
+            end_of_videos = [False] * max_clients
+                
             last_bit_rate = [DEFAULT_QUALITY] * max_clients
             bit_rate = [DEFAULT_QUALITY] * max_clients
             r_batch = [[]] * max_clients
@@ -117,7 +120,7 @@ def main():
                 log_file = open(log_path, 'wb')
                 log_files[i] = log_file
 
-print "Done."
+    print "Done."
                 
 if __name__ == '__main__':
     main()
