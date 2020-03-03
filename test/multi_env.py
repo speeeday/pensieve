@@ -27,6 +27,9 @@ class VideoClient:
 
     def serve_chunk(self, client_num, throughput, duration, video_chunk_sizes):
 
+        if self.end_of_video == True:
+            return []
+        
         records = []
         
         # check if buffer is greater than threshold, if so sleep
@@ -64,9 +67,12 @@ class VideoClient:
                 
                 self.video_chunk_counter += 1
                 video_chunk_remain = TOTAL_VIDEO_CHUNCK - self.video_chunk_counter
-                
+
+
+                return_end_of_video = False
                 if self.video_chunk_counter >= TOTAL_VIDEO_CHUNCK:
                     self.end_of_video = True
+                    return_end_of_video = True
                     self.buffer_size = 0
                     self.video_chunk_counter = 0
 
@@ -88,7 +94,7 @@ class VideoClient:
                                 return_buffer_size / MILLISECONDS_IN_SECOND, \
                                 rebuf / MILLISECONDS_IN_SECOND, \
                                 video_chunk_size, \
-                                self.end_of_video, \
+                                return_end_of_video, \
                                 video_chunk_remain))
                     
                 self.video_chunk_counter_sent = 0
