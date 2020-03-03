@@ -189,7 +189,7 @@ def main():
 	# ---- ---- ---- ----
 	# check each trace
 	# ---- ---- ---- ----
-'''
+
 	for l in time_all[SCHEMES[0]]:
 		schemes_check = True
 		for scheme in SCHEMES:
@@ -232,7 +232,7 @@ def main():
 			ax.legend(SCHEMES_REW, loc=9, bbox_to_anchor=(0.5, -0.1), ncol=int(np.ceil(len(SCHEMES) / 2.0)))
 			plt.show()
 
-'''
+
 
 if __name__ == '__main__':
 	main()

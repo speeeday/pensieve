@@ -35,6 +35,7 @@ class VideoClient:
             # we need to skip some network bandwidth here
             # but do not add up the delay
             drain_buffer_time = min(self.buffer_size - BUFFER_THRESH, duration * MILLISECONDS_IN_SECOND)
+            # round off to 0.5 ms
             self.sleep_time += np.ceil(drain_buffer_time / DRAIN_BUFFER_SLEEP_TIME) * \
                          DRAIN_BUFFER_SLEEP_TIME
             self.buffer_size -= self.sleep_time
@@ -46,15 +47,17 @@ class VideoClient:
             video_chunk_size = video_chunk_sizes[self.video_chunk_counter]
             
             if self.video_chunk_counter_sent + packet_payload > video_chunk_size:
+                # NEED TO PRINT OUT FRACTIONAL TIME, SEE WHY DELAY IS OFF
+                
                 # chunk finished being served
                 fractional_time = (video_chunk_size - self.video_chunk_counter_sent) / \
                                   throughput / PACKET_PAYLOAD_PORTION
                 self.delay += fractional_time
                 self.video_chunk_counter_sent = 0
 
-                duration -= fractional_time
+                duration -= np.ceil(fractional_time / DRAIN_BUFFER_SLEEP_TIME) * \
+                            DRAIN_BUFFER_SLEEP_TIME
                 
-                return_buffer_size = self.buffer_size
                 return_sleep_time = self.sleep_time
                 return_delay = (self.delay * MILLISECONDS_IN_SECOND) + LINK_RTT
                 
@@ -69,14 +72,16 @@ class VideoClient:
 
 
                 # rebuffer time
-                rebuf = np.maximum(self.delay - self.buffer_size, 0.0)
+                rebuf = np.maximum(return_delay - self.buffer_size, 0.0)
 
                 # update the buffer
-                self.buffer_size = np.maximum(self.buffer_size - self.delay, 0.0)
+                self.buffer_size = np.maximum(self.buffer_size - return_delay, 0.0)
 
                 # add in the new chunk
                 self.buffer_size += VIDEO_CHUNCK_LEN
 
+                return_buffer_size = self.buffer_size
+                
                 records.append((client_num, \
                                 return_delay, \
                                 return_sleep_time, \
@@ -90,7 +95,7 @@ class VideoClient:
                 self.sleep_time = 0
                 self.delay = 0
 
-                if not(self.end_of_video):
+                if duration > 0.0 and not(self.end_of_video):
                     records = records + self.serve_chunk(client_num, throughput, duration, video_chunk_sizes)
                 
             else:

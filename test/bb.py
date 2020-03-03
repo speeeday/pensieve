@@ -94,7 +94,7 @@ def main():
             print "video count", video_count
             video_count += 1
 
-            if video_count > len(all_file_names):
+            if video_count >= len(all_file_names):
                 break
 
             log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx]

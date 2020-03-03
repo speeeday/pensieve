@@ -32,15 +32,19 @@ def main():
     net_env = env.Environment(all_cooked_time=all_cooked_time,
                               all_cooked_bw=all_cooked_bw)
 
-    max_clients = net_env.MAX_CLIENT_NUM
+    print "Number of traces: {}".format(len(all_file_names))
+    print "Length of cooked time: {}".format(len(all_cooked_time))
+    print "Length of cooked BW: {}".format(len(all_cooked_bw))
     
+    max_clients = net_env.MAX_CLIENT_NUM
+
+    # setup log files for the clients that will start playback within the simulation
     log_files = [None] * max_clients
     for i in range(max_clients):
         log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx] + '_client_' + str(i)
         log_file = open(log_path, 'wb')
         log_files[i] = log_file
-        
-
+    
     epoch = 0
     time_stamp = 0
 
@@ -108,12 +112,14 @@ def main():
             bit_rate = [DEFAULT_QUALITY] * max_clients
             r_batch = [[]] * max_clients
 
+            print "Just finished trace: {}".format(all_file_names[net_env.trace_idx])
+            
             print "video count", video_count
             video_count += 1
 
-            if video_count > len(all_file_names):
+            if video_count >= len(all_file_names):
                 break
-
+            
             log_files = [None] * max_clients
             for i in range(max_clients):
                 log_path = LOG_FILE + '_' + all_file_names[net_env.trace_idx] + '_client_' + str(i)
