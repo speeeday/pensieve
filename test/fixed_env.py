@@ -63,12 +63,17 @@ class Environment:
             duration = self.cooked_time[self.mahimahi_ptr] \
                        - self.last_mahimahi_time
 
+            print "    Chunk: {}, Current Timestep Duration: {}, Chunk Size: {}, Counter: {}".format(self.video_chunk_counter,duration,video_chunk_size,video_chunk_counter_sent)
+            
             packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
 
             if video_chunk_counter_sent + packet_payload > video_chunk_size:
 
                 fractional_time = (video_chunk_size - video_chunk_counter_sent) / \
                                   throughput / PACKET_PAYLOAD_PORTION
+
+                print "Fractional Time for Chunk #{} is {}".format(self.video_chunk_counter, fractional_time)
+                
                 delay += fractional_time
                 self.last_mahimahi_time += fractional_time
                 break

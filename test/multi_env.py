@@ -23,14 +23,17 @@ class VideoClient:
         self.sleep_time = 0
         self.delay = 0.0
         self.end_of_video = False
-        
+        self.remaining_duration = 0.0
 
-    def serve_chunk(self, client_num, throughput, duration, video_chunk_sizes):
+    def serve_chunk(self, video_size, update_fn, client_num, throughput, duration, quality):
 
         if self.end_of_video == True:
             return []
+
+
         
-        records = []
+        print "    Chunk: {}, Current Timestep Duration: {}, Chunk Size: {}, Counter: {}".format(self.video_chunk_counter,duration,video_size[quality[client_num]][self.video_chunk_counter],self.video_chunk_counter_sent)
+  
         
         # check if buffer is greater than threshold, if so sleep
         if self.buffer_size > BUFFER_THRESH:
@@ -43,10 +46,11 @@ class VideoClient:
                          DRAIN_BUFFER_SLEEP_TIME
             self.buffer_size -= self.sleep_time
             duration -= self.sleep_time / MILLISECONDS_IN_SECOND
-
+            
         if duration > 0.0:
             packet_payload = throughput * duration * PACKET_PAYLOAD_PORTION
 
+            video_chunk_sizes = video_size[quality[client_num]]
             video_chunk_size = video_chunk_sizes[self.video_chunk_counter]
             
             if self.video_chunk_counter_sent + packet_payload > video_chunk_size:
@@ -55,11 +59,12 @@ class VideoClient:
                 # chunk finished being served
                 fractional_time = (video_chunk_size - self.video_chunk_counter_sent) / \
                                   throughput / PACKET_PAYLOAD_PORTION
+                print "Fractional Time for Chunk #{} is {}".format(self.video_chunk_counter, fractional_time)
+                
                 self.delay += fractional_time
                 self.video_chunk_counter_sent = 0
 
-                duration -= np.ceil(fractional_time / DRAIN_BUFFER_SLEEP_TIME) * \
-                            DRAIN_BUFFER_SLEEP_TIME
+                duration -= fractional_time
                 
                 return_sleep_time = self.sleep_time
                 return_delay = (self.delay * MILLISECONDS_IN_SECOND) + LINK_RTT
@@ -69,12 +74,6 @@ class VideoClient:
                 video_chunk_remain = TOTAL_VIDEO_CHUNCK - self.video_chunk_counter
 
 
-                return_end_of_video = False
-                if self.video_chunk_counter >= TOTAL_VIDEO_CHUNCK:
-                    self.end_of_video = True
-                    return_end_of_video = True
-                    self.buffer_size = 0
-                    self.video_chunk_counter = 0
 
 
                 # rebuffer time
@@ -87,28 +86,37 @@ class VideoClient:
                 self.buffer_size += VIDEO_CHUNCK_LEN
 
                 return_buffer_size = self.buffer_size
-                
-                records.append((client_num, \
+
+
+                return_end_of_video = False
+                if self.video_chunk_counter >= TOTAL_VIDEO_CHUNCK:
+                    self.end_of_video = True
+                    return_end_of_video = True
+                    self.buffer_size = 0
+                    self.video_chunk_counter = 0
+
+                self.remaining_duration = duration
+                    
+                update_fn(client_num, \
                                 return_delay, \
                                 return_sleep_time, \
                                 return_buffer_size / MILLISECONDS_IN_SECOND, \
                                 rebuf / MILLISECONDS_IN_SECOND, \
                                 video_chunk_size, \
                                 return_end_of_video, \
-                                video_chunk_remain))
+                                video_chunk_remain)
                     
                 self.video_chunk_counter_sent = 0
                 self.sleep_time = 0
                 self.delay = 0
 
                 if duration > 0.0 and not(self.end_of_video):
-                    records = records + self.serve_chunk(client_num, throughput, duration, video_chunk_sizes)
+                    self.serve_chunk(video_size, update_fn, client_num, throughput, duration, quality)
                 
             else:
                 # start serving next chunk for the duration
                 self.video_chunk_counter_sent += packet_payload
                 self.delay += duration
-        return records        
 
 
         
@@ -150,7 +158,7 @@ class Environment:
                 for line in f:
                     self.video_size[bitrate].append(int(line.split()[0]))
 
-    def get_video_chunks(self, quality):
+    def get_video_chunks(self, quality, update_fn):
 
         assert all([q >= 0 for q in quality])
         assert all([q < BITRATE_LEVELS for q in quality])
@@ -181,14 +189,11 @@ class Environment:
         # Scheduling policy goes here
         # Should return a weight vector that distributes traffic between clients
         weighted_queue = fair_sharing(self.num_clients)
-
-        records = []
                    
         for c in range(self.num_clients):
             # simulate the timestep for each client given its proportion of BW
             # add any records to be logged into the records list to be returned
-            video_chunk_sizes = self.video_size[quality[c]]
-            records += self.clients[c].serve_chunk(c, throughput, duration, video_chunk_sizes)
+            self.clients[c].serve_chunk(self.video_size,update_fn, c, throughput, duration, quality)
 
 
         # check if all videos are done (if so, iterate traces)
@@ -219,4 +224,4 @@ class Environment:
                 self.last_mahimahi_time = 0
 
 
-        return records
+
