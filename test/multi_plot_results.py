@@ -18,6 +18,7 @@ SIM_DP = 'sim_dp'
 #SCHEMES = ['BB', 'RB', 'FIXED', 'FESTIVE', 'BOLA', 'RL',  'sim_rl', SIM_DP]
 #SCHEMES = ['sim_rl', SIM_DP]
 SCHEMES = ['BB']
+SCHEME = 'BB'
 
 # QoE policy definitions
 def max_min_fairness(l):
@@ -118,7 +119,7 @@ def main():
 			bw = bw[::-1]
 		
 		time_ms = np.array(time_ms)
-		time_ms -= time_ms[0]
+#		time_ms -= time_ms[0]
 		
 		# print log_file
 
@@ -141,7 +142,7 @@ def main():
         for scheme in SCHEMES:
                 for k in multi_time_all[scheme]:
                         key = '_'.join(k.split('_')[:-2])
-                        print key
+                        print "{} ---> {}".format(k,key)
                         if key not in time_all[scheme]:
                                 time_all[scheme][key] = []
                                 bit_rate_all[scheme][key] = []
@@ -153,7 +154,20 @@ def main():
                         buff_all[scheme][key].append(multi_buff_all[scheme][k])
                         bw_all[scheme][key].append(multi_bw_all[scheme][k])
                         raw_reward_all[scheme][key].append(multi_raw_reward_all[scheme][k])
+                        print bit_rate_all[scheme][key]
+                        
 
+        # Fix the time_all structure
+        for scheme in SCHEMES:
+                for k in time_all[scheme]:
+                        inits = []
+                        for i in range(len(time_all[scheme][k])):
+#                                print time_all[scheme][k][i]
+                                inits.append(time_all[scheme][k][i][0])
+                        for i in range(len(time_all[scheme][k])):
+                                time_all[scheme][k][i] -= min(inits)
+
+                        
         # ---- ---- ---- ----
         # Combine Rewards
         # ---- ---- ---- ----
@@ -180,16 +194,16 @@ def main():
 	for l in time_all[SCHEMES[0]]:
 		schemes_check = True
 		for scheme in SCHEMES:
-#                        print l
-#                        print time_all[scheme].keys()
-#                        sys.exit()
                         print "Cond 1: {}".format(l not in time_all[scheme])
-                        print "Cond 2: {} - {}".format(len(time_all[scheme][l]) < VIDEO_LEN, len(time_all[scheme][l][0]))
 
-			if l not in time_all[scheme] or len(time_all[scheme][l][0]) < VIDEO_LEN:
+			if l not in time_all[scheme]: 
 				schemes_check = False
-                                print schemes_check
 				break
+                        for i in range(len(time_all[scheme][l])):
+                                print "Cond 2: {} - {}".format(len(time_all[scheme][l][i]) < VIDEO_LEN, len(time_all[scheme][l][i]))
+                                if len(time_all[scheme][l][i]) < VIDEO_LEN:
+                                        schemes_check = False
+                                        break
 		if schemes_check:
 			log_file_all.append(l)
 			for scheme in SCHEMES:
@@ -246,19 +260,30 @@ def main():
 	# ---- ---- ---- ----
 	# check each trace
 	# ---- ---- ---- ----
-'''
+
 	for l in time_all[SCHEMES[0]]:
 		schemes_check = True
 		for scheme in SCHEMES:
-			if l not in time_all[scheme] or len(time_all[scheme][l]) < VIDEO_LEN:
+                        print "Cond 1: {}".format(l not in time_all[scheme])
+
+			if l not in time_all[scheme]: 
 				schemes_check = False
 				break
+                        for i in range(len(time_all[scheme][l])):
+                                print "Cond 2: {} - {}".format(len(time_all[scheme][l][i]) < VIDEO_LEN, len(time_all[scheme][l][i]))
+                                if len(time_all[scheme][l][i]) < VIDEO_LEN:
+                                        schemes_check = False
+                                        break
+                        
 		if schemes_check:
 			fig = plt.figure()
 
 			ax = fig.add_subplot(311)
 			for scheme in SCHEMES:
-				ax.plot(time_all[scheme][l][:VIDEO_LEN], bit_rate_all[scheme][l][:VIDEO_LEN])
+                                for i in range(len(time_all[scheme][l])):
+                                        print time_all[scheme][l][i][:VIDEO_LEN]
+                                        print bit_rate_all[scheme][l][i][:VIDEO_LEN]
+				        ax.plot(time_all[scheme][l][i][:VIDEO_LEN], bit_rate_all[scheme][l][i][:VIDEO_LEN])
 			colors = [COLOR_MAP(i) for i in np.linspace(0, 1, len(ax.lines))]
 			for i,j in enumerate(ax.lines):
 				j.set_color(colors[i])	
@@ -267,7 +292,8 @@ def main():
 
 			ax = fig.add_subplot(312)
 			for scheme in SCHEMES:
-				ax.plot(time_all[scheme][l][:VIDEO_LEN], buff_all[scheme][l][:VIDEO_LEN])
+                                for i in range(len(time_all[scheme][l])):
+				        ax.plot(time_all[scheme][l][i][:VIDEO_LEN], buff_all[scheme][l][i][:VIDEO_LEN])
 			colors = [COLOR_MAP(i) for i in np.linspace(0, 1, len(ax.lines))]
 			for i,j in enumerate(ax.lines):
 				j.set_color(colors[i])	
@@ -275,7 +301,8 @@ def main():
 
 			ax = fig.add_subplot(313)
 			for scheme in SCHEMES:
-				ax.plot(time_all[scheme][l][:VIDEO_LEN], bw_all[scheme][l][:VIDEO_LEN])
+                                for i in range(len(time_all[scheme][l])):
+				        ax.plot(time_all[scheme][l][i][:VIDEO_LEN], bw_all[scheme][l][i][:VIDEO_LEN])
 			colors = [COLOR_MAP(i) for i in np.linspace(0, 1, len(ax.lines))]
 			for i,j in enumerate(ax.lines):
 				j.set_color(colors[i])	
@@ -288,7 +315,9 @@ def main():
 
 			ax.legend(SCHEMES_REW, loc=9, bbox_to_anchor=(0.5, -0.1), ncol=int(np.ceil(len(SCHEMES) / 2.0)))
 			plt.show()
-'''
+                else:
+                        print "Scheme didn't CHECK"
+                                
 
 if __name__ == '__main__':
 	main()

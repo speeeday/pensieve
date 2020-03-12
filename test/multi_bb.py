@@ -46,7 +46,7 @@ for i in range(max_clients):
     log_files[i] = log_file
 
 epoch = 0
-time_stamp = 0
+time_stamp = 0.0
 
 last_bit_rate = [DEFAULT_QUALITY] * max_clients
 bit_rate = [DEFAULT_QUALITY] * max_clients
@@ -57,14 +57,14 @@ video_count = 0
 end_of_videos = [False] * max_clients
 
 
-def client_update(client_num, delay, sleep_time, buffer_size, rebuf, \
+def client_update(client_num, timedelta, delay, sleep_time, buffer_size, rebuf, \
                   video_chunk_size, \
                   end_of_video, video_chunk_remain):
 
     global time_stamp, last_bit_rate, bit_rate, r_batch, video_count, end_of_videos, log_files, max_clients
 
-    time_stamp += delay  # in ms
-    time_stamp += sleep_time  # in ms
+#    time_stamp += delay  # in ms
+#    time_stamp += sleep_time  # in ms
 
     # reward is video quality - rebuffer penalty
     reward = VIDEO_BIT_RATE[bit_rate[client_num]] / M_IN_K \
@@ -76,7 +76,7 @@ def client_update(client_num, delay, sleep_time, buffer_size, rebuf, \
     last_bit_rate[client_num] = bit_rate[client_num]
 
     # log time_stamp, bit_rate, buffer_size, reward
-    log_files[client_num].write(str(time_stamp / M_IN_K) + '\t' +
+    log_files[client_num].write(str((time_stamp+timedelta) / M_IN_K) + '\t' +
                                 str(VIDEO_BIT_RATE[bit_rate[client_num]]) + '\t' +
                                 str(buffer_size) + '\t' +
                                 str(rebuf) + '\t' +
@@ -104,7 +104,7 @@ while True:  # serve video forever
 
 
 #######
-    net_env.get_video_chunks(bit_rate, client_update)
+    time_stamp += (net_env.get_video_chunks(bit_rate, client_update)) * M_IN_K
 
     if all(end_of_videos):
         for client in range(max_clients):

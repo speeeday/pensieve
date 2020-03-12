@@ -33,7 +33,8 @@ class VideoClient:
 
         
         print "    Chunk: {}, Current Timestep Duration: {}, Chunk Size: {}, Counter: {}".format(self.video_chunk_counter,duration,video_size[quality[client_num]][self.video_chunk_counter],self.video_chunk_counter_sent)
-  
+
+        curr_sleep_time = 0.0
         
         # check if buffer is greater than threshold, if so sleep
         if self.buffer_size > BUFFER_THRESH:
@@ -42,8 +43,9 @@ class VideoClient:
             # but do not add up the delay
             drain_buffer_time = min(self.buffer_size - BUFFER_THRESH, duration * MILLISECONDS_IN_SECOND)
             # round off to 0.5 ms
-            self.sleep_time += np.ceil(drain_buffer_time / DRAIN_BUFFER_SLEEP_TIME) * \
-                         DRAIN_BUFFER_SLEEP_TIME
+            curr_sleep_time = np.ceil(drain_buffer_time / DRAIN_BUFFER_SLEEP_TIME) * \
+                              DRAIN_BUFFER_SLEEP_TIME
+            self.sleep_time += curr_sleep_time 
             self.buffer_size -= self.sleep_time
             duration -= self.sleep_time / MILLISECONDS_IN_SECOND
             
@@ -60,6 +62,7 @@ class VideoClient:
                 fractional_time = (video_chunk_size - self.video_chunk_counter_sent) / \
                                   throughput / PACKET_PAYLOAD_PORTION
                 print "Fractional Time for Chunk #{} is {}".format(self.video_chunk_counter, fractional_time)
+
                 
                 self.delay += fractional_time
                 self.video_chunk_counter_sent = 0
@@ -96,15 +99,19 @@ class VideoClient:
                     self.video_chunk_counter = 0
 
                 self.remaining_duration = duration
-                    
+
+                print "Curr Sleep Time: {}".format(curr_sleep_time)
+                print "Fractional Time: {}".format(fractional_time)
+                
                 update_fn(client_num, \
-                                return_delay, \
-                                return_sleep_time, \
-                                return_buffer_size / MILLISECONDS_IN_SECOND, \
-                                rebuf / MILLISECONDS_IN_SECOND, \
-                                video_chunk_size, \
-                                return_end_of_video, \
-                                video_chunk_remain)
+                          curr_sleep_time + (fractional_time*MILLISECONDS_IN_SECOND), \
+                          return_delay, \
+                          return_sleep_time, \
+                          return_buffer_size / MILLISECONDS_IN_SECOND, \
+                          rebuf / MILLISECONDS_IN_SECOND, \
+                          video_chunk_size, \
+                          return_end_of_video, \
+                          video_chunk_remain)
                     
                 self.video_chunk_counter_sent = 0
                 self.sleep_time = 0
@@ -123,8 +130,8 @@ class VideoClient:
 
 class Environment:
 
-    NEW_CLIENT_PROB = 0.3 # tunable parameter
-    MAX_CLIENT_NUM = 1     # tunable parameter        
+    NEW_CLIENT_PROB = 0.1 # tunable parameter
+    MAX_CLIENT_NUM = 4     # tunable parameter        
 
     def __init__(self, all_cooked_time, all_cooked_bw, random_seed=RANDOM_SEED):
         assert len(all_cooked_time) == len(all_cooked_bw)
@@ -185,7 +192,7 @@ class Environment:
                    * B_IN_MB / BITS_IN_BYTE
         duration = self.cooked_time[self.mahimahi_ptr] \
                    - self.last_mahimahi_time
-
+        
         # Scheduling policy goes here
         # Should return a weight vector that distributes traffic between clients
         weighted_queue = fair_sharing(self.num_clients)
@@ -222,6 +229,7 @@ class Environment:
                 # note: trace file starts with time 0
                 self.mahimahi_ptr = 1
                 self.last_mahimahi_time = 0
+        return duration
 
 
-
+        
